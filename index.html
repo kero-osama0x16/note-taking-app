@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceNotes — Speech to Text</title>
+    <meta name="description" content="Speech-to-text note-taking app powered by Whisper AI">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* ── Reset & Base ────────────────────────────────────────── */
+        :root {
+            --bg-deep:    #0a0a0a;
+            --bg-panel:   #101010;
+            --bg-card:    #161616;
+            --bg-hover:   #1e1e1e;
+            --bg-input:   #131313;
+            --border:     #222222;
+            --border-lt:  #2a2a2a;
+            --accent:     #c8a96e;
+            --accent-dim: #7a6440;
+            --accent-glow: rgba(200, 169, 110, 0.08);
+            --text-pri:   #e0e0e0;
+            --text-sec:   #777777;
+            --text-dim:   #3a3a3a;
+            --red:        #c0392b;
+            --red-dim:    #7a2319;
+            --green:      #27ae60;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-pri);
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Layout ──────────────────────────────────────────────── */
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────── */
+        .sidebar {
+            width: 240px;
+            min-width: 240px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 24px 16px 16px;
+            user-select: none;
+        }
+
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 5px;
+        }
+
+        .subtitle {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 16px 0 12px;
+        }
+
+        .section-label {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-dim);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            padding-left: 4px;
+        }
+
+        .notes-tree {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .date-group {
+            margin-bottom: 4px;
+        }
+
+        .date-label {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-dim);
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .date-label span {
+            font-size: 13px;
+        }
+
+        .note-item {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-sec);
+            padding: 6px 10px 6px 32px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .note-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-pri);
+        }
+
+        .note-item.active {
+            background: var(--bg-card);
+            color: var(--accent);
+            border-left: 2px solid var(--accent);
+            padding-left: 30px;
+        }
+
+        .empty-notes {
+            font-size: 11px;
+            color: var(--text-dim);
+            padding: 16px 8px;
+            font-style: italic;
+            text-align: center;
+        }
+
+        .btn-sidebar {
+            width: 100%;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text-dim);
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-top: 10px;
+        }
+
+        .btn-sidebar:hover {
+            background: var(--bg-hover);
+            color: var(--text-sec);
+            border-color: var(--border-lt);
+        }
+
+        /* ── Main Area ───────────────────────────────────────────── */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 32px;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 20px;
+        }
+
+        .rec-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--red);
+            border-radius: 50%;
+            display: none;
+            box-shadow: 0 0 8px rgba(192, 57, 43, 0.5);
+            animation: pulse 0.9s ease-in-out infinite;
+        }
+
+        .rec-dot.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.85); }
+        }
+
+        .status {
+            font-size: 11px;
+            color: var(--text-sec);
+            letter-spacing: 1px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .timer {
+            font-size: 11px;
+            color: var(--red);
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+
+        .lang-badge {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 1px;
+        }
+
+        .note-title {
+            font-size: 13px;
+            color: var(--text-pri);
+            letter-spacing: 1px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        /* ── Text Display ────────────────────────────────────────── */
+        .text-area {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            color: var(--text-pri);
+            font-size: 14px;
+            line-height: 1.8;
+            font-family: 'Inter', sans-serif;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            transition: border-color 0.2s ease;
+            position: relative;
+        }
+
+        .text-area.placeholder {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        .text-area .loading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-sec);
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        .text-area .loading .spinner {
+            flex-shrink: 0;
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────── */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            height: 42px;
+            padding: 0 24px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--text-sec);
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--bg-hover);
+            color: var(--text-pri);
+            border-color: var(--border-lt);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .btn-rec {
+            background: var(--accent);
+            color: var(--bg-deep);
+            border: none;
+            font-weight: 700;
+            letter-spacing: 2px;
+            box-shadow: 0 2px 12px rgba(200, 169, 110, 0.15);
+        }
+
+        .btn-rec:hover:not(:disabled) {
+            background: #d9ba7e;
+            color: var(--bg-deep);
+            box-shadow: 0 2px 20px rgba(200, 169, 110, 0.25);
+        }
+
+        .btn-rec:disabled {
+            background: var(--accent-dim);
+            color: var(--bg-panel);
+            box-shadow: none;
+        }
+
+        .btn-stop {
+            background: var(--red);
+            color: var(--text-pri);
+            border: none;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-stop:disabled {
+            background: var(--red-dim);
+            color: var(--text-dim);
+        }
+
+        .spacer { flex: 1; }
+
+        /* ── Spinner ─────────────────────────────────────────────── */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-lt);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Toast ────────────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-lt);
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: var(--text-pri);
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: all 0.3s ease;
+            max-width: 380px;
+            pointer-events: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            border-color: var(--red-dim);
+            border-left: 3px solid var(--red);
+        }
+
+        .toast.success {
+            border-left: 3px solid var(--green);
+        }
+
+        /* ── Scrollbar ───────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+        /* ── First-load overlay ──────────────────────────────────── */
+        .model-loading-banner {
+            background: var(--accent-glow);
+            border: 1px solid var(--accent-dim);
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: var(--accent);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.5px;
+        }
+
+        .model-loading-banner.show {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app">
+
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <aside class="sidebar">
+        <div class="logo">VOICENOTES</div>
+        <div class="subtitle">speech · memory</div>
+        <div class="divider"></div>
+        <div class="section-label">saved notes</div>
+        <div class="notes-tree" id="notes-tree"></div>
+        <button class="btn-sidebar" id="btn-refresh">↻  REFRESH</button>
+    </aside>
+
+    <!-- ── Main Content ────────────────────────────────────── -->
+    <main class="main">
+
+        <!-- Top bar -->
+        <div class="top-bar">
+            <div class="rec-dot" id="rec-dot"></div>
+            <span class="status" id="status">ready</span>
+            <span class="timer" id="timer"></span>
+            <span class="lang-badge" id="lang"></span>
+        </div>
+
+        <!-- Note title -->
+        <div class="note-title" id="note-title">— new recording —</div>
+
+        <!-- Model loading banner (shown on first transcription) -->
+        <div class="model-loading-banner" id="model-banner">
+            <div class="spinner"></div>
+            loading Whisper model for the first time — this may take a minute…
+        </div>
+
+        <!-- Text area -->
+        <div class="text-area placeholder" id="text-area">press  ⏺ REC  to start recording.
+
+your transcription will appear here.
+supports Arabic &amp; English automatically.</div>
+
+        <!-- Buttons -->
+        <div class="btn-row">
+            <button class="btn btn-rec" id="btn-rec">⏺  REC</button>
+            <button class="btn btn-stop" id="btn-stop" disabled>⏹  STOP</button>
+            <div class="spacer"></div>
+            <button class="btn" id="btn-clear">✕  CLEAR</button>
+        </div>
+
+    </main>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+    // ── State ────────────────────────────────────────────────
+    let isRecording = false;
+    let recordingTimer = null;
+    let recordingStart = null;
+    let firstTranscription = true;
+
+    // ── DOM refs ─────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const recDot    = $('rec-dot');
+    const statusEl  = $('status');
+    const timerEl   = $('timer');
+    const langEl    = $('lang');
+    const titleEl   = $('note-title');
+    const textEl    = $('text-area');
+    const btnRec    = $('btn-rec');
+    const btnStop   = $('btn-stop');
+    const btnClear  = $('btn-clear');
+    const btnRefresh = $('btn-refresh');
+    const notesTree = $('notes-tree');
+    const modelBanner = $('model-banner');
+
+    // ── Recording ────────────────────────────────────────────
+    async function startRecording() {
+        try {
+            const res = await fetch('/api/record/start', { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            isRecording = true;
+            btnRec.disabled = true;
+            btnStop.disabled = false;
+            recDot.classList.add('active');
+            statusEl.textContent = 'recording…';
+            titleEl.textContent = '— recording —';
+            textEl.textContent = '';
+            textEl.classList.remove('placeholder');
+            langEl.textContent = '';
+            modelBanner.classList.remove('show');
+
+            // Start timer
+            recordingStart = Date.now();
+            updateTimer();
+            recordingTimer = setInterval(updateTimer, 200);
+
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    async function stopRecording() {
+        // Stop timer
+        clearInterval(recordingTimer);
+        recordingTimer = null;
+        timerEl.textContent = '';
+
+        isRecording = false;
+        btnStop.disabled = true;
+        recDot.classList.remove('active');
+        statusEl.textContent = 'transcribing…';
+        titleEl.textContent = '— transcribing —';
+
+        // Show loading state
+        textEl.classList.remove('placeholder');
+        textEl.innerHTML = '<div class="loading"><div class="spinner"></div> processing audio…</div>';
+
+        // Show model banner on first use
+        if (firstTranscription) {
+            modelBanner.classList.add('show');
+        }
+
+        try {
+            const res = await fetch('/api/record/stop', { method: 'POST' });
+            const data = await res.json();
+
+            modelBanner.classList.remove('show');
+            firstTranscription = false;
+
+            if (!res.ok) throw new Error(data.error);
+
+            textEl.textContent = data.text;
+            titleEl.textContent = data.filename;
+            langEl.textContent = '[ ' + data.language + ' ]';
+            statusEl.textContent = 'saved → ' + data.date + '/' + data.filename;
+            btnRec.disabled = false;
+
+            loadNotes();
+            showToast('Note saved: ' + data.filename, 'success');
+
+        } catch (err) {
+            modelBanner.classList.remove('show');
+            firstTranscription = false;
+            textEl.textContent = 'Error: ' + err.message;
+            statusEl.textContent = 'transcription failed';
+            btnRec.disabled = false;
+            showToast(err.message, 'error');
+        }
+    }
+
+    function updateTimer() {
+        const elapsed = Date.now() - recordingStart;
+        const totalSecs = Math.floor(elapsed / 1000);
+        const mins = Math.floor(totalSecs / 60);
+        const secs = totalSecs % 60;
+        timerEl.textContent =
+            String(mins).padStart(2, '0') + ':' +
+            String(secs).padStart(2, '0');
+    }
+
+    // ── Notes browser ────────────────────────────────────────
+    async function loadNotes() {
+        try {
+            const res = await fetch('/api/notes');
+            const data = await res.json();
+            renderNotes(data);
+        } catch (err) {
+            console.error('Failed to load notes:', err);
+        }
+    }
+
+    function renderNotes(notes) {
+        notesTree.innerHTML = '';
+        if (!notes.length) {
+            notesTree.innerHTML = '<div class="empty-notes">no notes yet</div>';
+            return;
+        }
+        notes.forEach(group => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'date-group';
+
+            const label = document.createElement('div');
+            label.className = 'date-label';
+            label.innerHTML = '<span>📅</span> ' + group.date;
+            groupEl.appendChild(label);
+
+            group.files.forEach(fname => {
+                const item = document.createElement('div');
+                item.className = 'note-item';
+                item.textContent = fname;
+                item.addEventListener('click', () => viewNote(group.date, fname, item));
+                groupEl.appendChild(item);
+            });
+
+            notesTree.appendChild(groupEl);
+        });
+    }
+
+    async function viewNote(date, filename, el) {
+        // Highlight active
+        document.querySelectorAll('.note-item.active')
+            .forEach(e => e.classList.remove('active'));
+        if (el) el.classList.add('active');
+
+        try {
+            const res = await fetch('/api/notes/' + date + '/' + filename);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            textEl.textContent = data.content;
+            textEl.classList.remove('placeholder');
+            titleEl.textContent = filename;
+            statusEl.textContent = 'viewing  ' + date + '/' + filename;
+
+            // Extract language from header
+            langEl.textContent = '';
+            const lines = data.content.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('Lang :')) {
+                    langEl.textContent = '[ ' + line.split(':')[1].trim() + ' ]';
+                    break;
+                }
+            }
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+
+    // ── Clear ────────────────────────────────────────────────
+    function clearDisplay() {
+        textEl.textContent = 'press  ⏺ REC  to start recording.\n\nyour transcription will appear here.\nsupports Arabic & English automatically.';
+        textEl.classList.add('placeholder');
+        titleEl.textContent = '— new recording —';
+        langEl.textContent = '';
+        statusEl.textContent = 'ready';
+        modelBanner.classList.remove('show');
+        document.querySelectorAll('.note-item.active')
+            .forEach(e => e.classList.remove('active'));
+    }
+
+    // ── Toast ────────────────────────────────────────────────
+    let toastTimeout = null;
+    function showToast(message, type) {
+        const toast = $('toast');
+        toast.textContent = message;
+        toast.className = 'toast show ' + (type || '');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.className = 'toast';
+        }, 3500);
+    }
+
+    // ── Event listeners ──────────────────────────────────────
+    btnRec.addEventListener('click', startRecording);
+    btnStop.addEventListener('click', stopRecording);
+    btnClear.addEventListener('click', clearDisplay);
+    btnRefresh.addEventListener('click', loadNotes);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        if (e.key === 'r' && !isRecording && !btnRec.disabled && e.target === document.body) {
+            startRecording();
+        }
+        if (e.key === 's' && isRecording && e.target === document.body) {
+            stopRecording();
+        }
+    });
+
+    // Warn before closing while recording
+    window.addEventListener('beforeunload', e => {
+        if (isRecording) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // ── Init ─────────────────────────────────────────────────
+    loadNotes();
+</script>
+
+</body>
+</html>
